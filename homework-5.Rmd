@@ -142,14 +142,20 @@ Fit the models to your folded data using `tune_grid()`.
 
 Use `autoplot()` on the results. What do you notice? Do larger or smaller values of `penalty` and `mixture` produce better accuracy and ROC AUC?
 
-```{r}
-
+```{r, eval = FALSE}
 poke_res <- tune_grid(
   poke_wf,
   resamples = poke_folds, 
   grid = data.frame(c(penalty_grid, mixture_grid))
 )
+```
 
+
+```{r}
+
+
+#save(poke_res, file = "data/model.rda")
+load(file = "data/model.rda")
 autoplot(poke_res)
 ```
 
@@ -186,18 +192,21 @@ augment(poke_final_fit, new_data = poke_test) %>%
   roc_curve(type_1, c(.pred_Bug, .pred_Fire, .pred_Grass, .pred_Normal, .pred_Psychic, .pred_Water)) %>%
   autoplot()
 
+augment(poke_final_fit, new_data = poke_test) %>%
+  conf_mat(truth = type_1, estimate = .pred_class)
+
 word <- augment(poke_final_fit, new_data = poke_test) %>%
   conf_mat(truth = type_1, estimate = .pred_class)
 
 word <- data.frame(word$table)
 
-ggplot(word, mapping = aes(y = Prediction, x = Truth)) +
+ggplot(word, mapping = aes(x = Prediction, y = Truth)) +
   geom_tile(aes(fill = Freq), colour = "white") +
   geom_text(aes(label = sprintf("%1.0f",Freq)), vjust = 1) +
   scale_fill_gradient(low = "white", high = "steelblue")
 ```
 
-It was the best at predicting normal type and the worst at predicting fire type. This may be because there were the most normal type pokemon to train our model with in the first place. Notably there were no bug type in my testing set. So I can't even know how the model behaved on this outcome.
+For some reason when I knit to html my heatmap of the confusion matrix goes all wonky. However, from my observation from the correct matrix; It was the best at predicting normal type and the worst at predicting fire type. This may be because there were the most normal type pokemon to train our model with in the first place. Notably there were no bug type in my testing set. So I can't even know how the model behaved on this outcome.
 
 ## For 231 Students
 
