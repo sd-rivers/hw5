@@ -117,15 +117,58 @@ Set up this model and workflow. Create a regular grid for `penalty` and `mixture
 
 How many total models will you be fitting when you fit these models to your folded data?
 
+```{r}
+
+penalty_grid <- grid_regular(penalty(range = c(-5, 5)), levels = 10)
+penalty_grid
+
+mixture_grid <- grid_regular(mixture(range = c(0,1)), levels = 10)
+mixture_grid
+
+poke_spec <- 
+  multinom_reg(penalty = tune(), mixture = tune()) %>% 
+  set_engine("glmnet")
+
+poke_wf <- workflow() %>%
+  add_recipe(poke_rec) %>%
+  add_model(poke_spec)
+```
+
+We will be fitting 5 folds * 10 parameters for penalty * 10 parameters for mixture = 500 models.
+
 ### Exercise 6
 
 Fit the models to your folded data using `tune_grid()`.
 
 Use `autoplot()` on the results. What do you notice? Do larger or smaller values of `penalty` and `mixture` produce better accuracy and ROC AUC?
 
+```{r}
+
+poke_res <- tune_grid(
+  poke_wf,
+  resamples = poke_folds, 
+  grid = data.frame(c(penalty_grid, mixture_grid))
+)
+
+autoplot(poke_res)
+```
+
+Accuracy peaks around the lower end of possible values for both penalty and mixture. I'd say about a -3.8 for penalty and .11 for mixture. Roc_auc peaks around the lower end of possible values for both penalty and mixture. I'd say about a -3.8 for penalty and .11 for mixture.
+
 ### Exercise 7
 
 Use `select_best()` to choose the model that has the optimal `roc_auc`. Then use `finalize_workflow()`, `fit()`, and `augment()` to fit the model to the training set and evaluate its performance on the testing set.
+
+```{r}
+best_penalty <- select_best(poke_res, metric = "roc_auc")
+best_penalty
+
+poke_final <- finalize_workflow(poke_wf, best_penalty)
+poke_final_fit <- fit(poke_final, data = poke_train)
+
+augment(poke_final_fit, new_data = poke_test) %>%
+  accuracy(truth = type_1, estimate = .pred_class)
+```
 
 ### Exercise 8
 
@@ -134,6 +177,27 @@ Calculate the overall ROC AUC on the testing set.
 Then create plots of the different ROC curves, one per level of the outcome. Also make a heat map of the confusion matrix.
 
 What do you notice? How did your model do? Which Pokemon types is the model best at predicting, and which is it worst at? Do you have any ideas why this might be?
+
+```{r}
+augment(poke_final_fit, new_data = poke_test) %>% 
+  roc_auc(type_1, c(.pred_Bug, .pred_Fire, .pred_Grass, .pred_Normal, .pred_Psychic, .pred_Water))
+
+augment(poke_final_fit, new_data = poke_test) %>% 
+  roc_curve(type_1, c(.pred_Bug, .pred_Fire, .pred_Grass, .pred_Normal, .pred_Psychic, .pred_Water)) %>%
+  autoplot()
+
+word <- augment(poke_final_fit, new_data = poke_test) %>%
+  conf_mat(truth = type_1, estimate = .pred_class)
+
+word <- data.frame(word$table)
+
+ggplot(word, mapping = aes(y = Prediction, x = Truth)) +
+  geom_tile(aes(fill = Freq), colour = "white") +
+  geom_text(aes(label = sprintf("%1.0f",Freq)), vjust = 1) +
+  scale_fill_gradient(low = "white", high = "steelblue")
+```
+
+It was the best at predicting normal type and the worst at predicting fire type. This may be because there were the most normal type pokemon to train our model with in the first place. Notably there were no bug type in my testing set. So I can't even know how the model behaved on this outcome.
 
 ## For 231 Students
 
